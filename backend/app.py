@@ -24,21 +24,34 @@ CORS(app)
 MAX_RETRIES = 3
 
 
-def get_openai_client():
-    """Create an OpenAI client from environment variables."""
+def get_llm_client() -> tuple[OpenAI | None, str | None, str | None]:
+    """Create an LLM client based on the configured provider.
+
+    Returns (client, model, error).
+    Supports 'ollama' and 'openai' (default) providers via LLM_PROVIDER env var.
+    """
+    provider = os.getenv("LLM_PROVIDER", "openai").lower()
+
+    if provider == "ollama":
+        base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434/v1")
+        model = os.getenv("OLLAMA_MODEL", "llama3.2")
+        # Ollama exposes an OpenAI-compatible API; use a placeholder API key.
+        client = OpenAI(base_url=base_url, api_key="ollama")
+        return client, model, None
+
+    # Default: OpenAI
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
-        return None
-    return OpenAI(api_key=api_key)
+        return None, None, "OPENAI_API_KEY not configured"
+    model = os.getenv("OPENAI_MODEL", "gpt-4o")
+    return OpenAI(api_key=api_key), model, None
 
 
 def call_llm(topic: str) -> tuple[list | None, str | None]:
     """Call the LLM to generate questions. Retries on validation failure."""
-    client = get_openai_client()
-    if not client:
-        return None, "OPENAI_API_KEY not configured"
-
-    model = os.getenv("OPENAI_MODEL", "gpt-4o")
+    client, model, error = get_llm_client()
+    if error:
+        return None, error
 
     for attempt in range(MAX_RETRIES):
         try:
@@ -178,8 +191,12 @@ def submit_code():
 @app.route("/api/health", methods=["GET"])
 def health():
     """Health check endpoint."""
-    has_key = bool(os.getenv("OPENAI_API_KEY"))
-    return jsonify({"status": "ok", "llm_configured": has_key})
+    provider = os.getenv("LLM_PROVIDER", "openai").lower()
+    if provider == "ollama":
+        llm_configured = True
+    else:
+        llm_configured = bool(os.getenv("OPENAI_API_KEY"))
+    return jsonify({"status": "ok", "llm_configured": llm_configured, "llm_provider": provider})
 
 
 if __name__ == "__main__":
