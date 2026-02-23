@@ -146,11 +146,60 @@ def client():
         yield c
 
 
+@pytest.fixture(autouse=True)
+def _add_backend_to_path():
+    import sys
+    import os
+    sys.path.insert(0, os.path.dirname(__file__))
+
+
+def test_get_llm_client_ollama(monkeypatch):
+    monkeypatch.setenv("LLM_PROVIDER", "ollama")
+    monkeypatch.setenv("OLLAMA_BASE_URL", "http://localhost:11434/v1")
+    monkeypatch.setenv("OLLAMA_MODEL", "llama3.2")
+    from app import get_llm_client
+    client, model, error = get_llm_client()
+    assert client is not None
+    assert model == "llama3.2"
+    assert error is None
+
+
+def test_get_llm_client_openai_no_key(monkeypatch):
+    monkeypatch.setenv("LLM_PROVIDER", "openai")
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    from app import get_llm_client
+    client, model, error = get_llm_client()
+    assert client is None
+    assert error is not None
+    assert "OPENAI_API_KEY" in error
+
+
 def test_health_endpoint(client):
     resp = client.get("/api/health")
     assert resp.status_code == 200
     data = resp.get_json()
     assert data["status"] == "ok"
+    assert "llm_provider" in data
+
+
+def test_health_endpoint_ollama_provider(client, monkeypatch):
+    monkeypatch.setenv("LLM_PROVIDER", "ollama")
+    resp = client.get("/api/health")
+    assert resp.status_code == 200
+    data = resp.get_json()
+    assert data["status"] == "ok"
+    assert data["llm_provider"] == "ollama"
+    assert data["llm_configured"] is True
+
+
+def test_health_endpoint_openai_no_key(client, monkeypatch):
+    monkeypatch.setenv("LLM_PROVIDER", "openai")
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    resp = client.get("/api/health")
+    assert resp.status_code == 200
+    data = resp.get_json()
+    assert data["llm_provider"] == "openai"
+    assert data["llm_configured"] is False
 
 
 def test_generate_missing_topic(client):
