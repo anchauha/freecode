@@ -1,0 +1,24 @@
+.code-editor {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.editor-header {
+  display: flex;
+  align-items: center;
+  padding: 0.5rem 1rem;
+  background: #21252b;
+  border-bottom: 1px solid #3e4452;
+}
+
+.editor-lang {
+  font-size: 0.85rem;
+  color: #abb2bf;
+  font-weight: 600;
+}
+
+.editor-wrapper {
+  flex: 1;
+  min-height: 0;
+}
